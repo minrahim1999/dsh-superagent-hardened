@@ -23,6 +23,9 @@ export const Config = s.object({
   sessionApproval: s.string().pattern(/^(ask|never)$/)
     .description('Approval policy applied on top of sessionPermission. `never` lets an unattended Executor run without a person answering prompts; pair it with a confining sandbox.')
     .default('never'),
+  processEnvironment: s.string().pattern(/^(shims|shims-and-git|none)$/)
+    .description('What this plugin changes in the DSH process environment once setup succeeds. `shims` puts the shim directory (the agent gh and the blocked commands) first on PATH and leaves git configuration alone; `shims-and-git` (upstream) also rewrites GIT_CONFIG_GLOBAL so every git command in this process ignores the operator config; `none` changes nothing, so worker shells get neither.')
+    .default('shims'),
   promptMaxChars: s.number().min(LIMITS.promptMaxChars.min).max(LIMITS.promptMaxChars.max).step(1).default(100000)
     .description('Largest saved prompt configuration, in characters.').volatile(),
   admissionContextMaxPages: s.number().min(LIMITS.admissionContextMaxPages.min).max(LIMITS.admissionContextMaxPages.max).step(1).default(10)
@@ -37,6 +40,8 @@ export interface Machine {
   sessionPermission: string
   /** Approval policy applied on top of that preset, so an unattended Session is never left waiting. */
   sessionApproval: 'ask' | 'never'
+  /** What setup changes in this DSH process's environment once it succeeds. */
+  processEnvironment: 'shims' | 'shims-and-git' | 'none'
   promptMaxChars: Volatile<number>
   admissionContextMaxPages: Volatile<number>
   admissionContextTimeoutMs: Volatile<number>
@@ -51,8 +56,9 @@ const MOVED: Record<string, string> = {
 export function machineOf(config: DeploymentConfig): Machine {
   const unknown = Object.keys(config).filter(key => !(key in (Config.dict ?? {})))
   if (unknown.length) throw new Error(`dsh-superagent configuration has keys it does not use: ${unknown.map(key => MOVED[key] ? `${key} (now ${MOVED[key]})` : key).join(', ')}; docs/006-deployment.md lists the keys`)
-  const { stateDir, sessionPermission, sessionApproval, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs } = config
+  const { stateDir, sessionPermission, sessionApproval, processEnvironment, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs } = config
   return { stateDir, sessionPermission, sessionApproval: sessionApproval === 'ask' ? 'ask' : 'never',
+    processEnvironment: processEnvironment as Machine['processEnvironment'],
     promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs }
 }
 

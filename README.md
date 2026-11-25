@@ -9,7 +9,8 @@
 > (MIT, commit `8c32a9d`). It is not an official DeepSeek project either. Every change from that
 > commit, and the reasoning behind it, is listed in [LOCAL-CHANGES.md](LOCAL-CHANGES.md): Sessions run
 > in a confining default sandbox with no pending approvals, the state directory has a default under
-> `$DSH_HOME/state/superagent`, and the default blocked commands refuse host-dangerous tools. Its
+> `$DSH_HOME/state/superagent`, the default blocked commands refuse host-dangerous tools, and setup no
+> longer rewrites the host process's git configuration (only its `PATH` shims). Its
 > `pnpm check` (typecheck, tests, build) passes against DeepSeek Harness 0.2.2-rc.5.
 
 dsh-superagent is a proactive coding agent for one GitHub repository, packaged as a bundle for [DeepSeek Harness](https://www.deepseek.com/en/harness/). It listens to GitHub and, optionally, Feishu. When someone allowed asks the agent for work, it opens a work item, works on it in its own agent session and directory, and answers in the original conversation, for example with a pull request. A web panel shows what needs a person.

@@ -855,9 +855,12 @@ it('reports each setup problem where the operator fixes it, and checks the agent
   expect(check[1]!.startsWith('PATH=')).toBe(true)
   expect(check[1]!.slice('PATH='.length).split(':')).not.toContain(join(directory, 'worker-bin'))
   const valid = { ...answers }
-  // git older than 2.32 ignores GIT_CONFIG_GLOBAL and reads the operator's configuration.
+  // git older than 2.32 ignores GIT_CONFIG_GLOBAL and reads the operator's configuration; only `shims-and-git` claims
+  // and checks that isolation, so only it reports this problem.
   answers = { ...valid, [HELPERS]: 'file:/home/me/.gitconfig\0!gh auth git-credential\0' }
-  await needs('deployment', 'gitTooOld', {})
+  const old = await restart({ processEnvironment: 'shims-and-git' })
+  await old.ready
+  expect(old.setupProblem).toMatchObject({ place: 'deployment', code: 'gitTooOld', values: {} })
   await needs('github', 'repositoryUnset', {}, { github: { repository: '' } })
   // A broken Feishu bot leaves Feishu out and says why; GitHub work goes on.
   answers = { ...valid, [`${BOT()} config strict-mode`]: 'strict-mode: off (source: profile)' }
@@ -963,7 +966,7 @@ it('runs setup again while the Feishu bot check failed, and restores the process
   next.checkSetup()
   await vi.waitFor(() => expect(restarts).toHaveBeenCalledTimes(1))
   answers[HELPERS] = 'file:/home/me/.gitconfig\0!gh auth git-credential\0'
-  const broken = await restart()
+  const broken = await restart({ processEnvironment: 'shims-and-git' })
   await broken.ready
   expect(broken.setupProblem).toMatchObject({ place: 'deployment', code: 'gitTooOld' })
   expect(process.env.GIT_CONFIG_GLOBAL).toBeUndefined()
@@ -982,11 +985,10 @@ it('writes worker shims and the agent environment from the configuration only, a
   expect(readFileSync(join(bin, 'lark-cli'), 'utf8')).toContain('lark-cli is unavailable: this installation has no Feishu bot.')
   expect(readFileSync(join(bin, 'gh'), 'utf8')).toContain(`exec '${AGENT()}'`)
   expect(readFileSync(workerGitConfig(directory), 'utf8')).toContain(`[credential "https://github.com"]\n\thelper = "${credentialHelper(AGENT())}"`)
-  expect(process.env).toMatchObject({ GIT_CONFIG_GLOBAL: workerGitConfig(directory), GIT_CONFIG_NOSYSTEM: '1' })
-  expect(process.env.GIT_AUTHOR_NAME).toBeUndefined()
+  // Our `shims` default puts the shim directory first on PATH and leaves git configuration to the operator.
+  expect(process.env.GIT_CONFIG_GLOBAL).toBeUndefined()
   expect(process.env.PATH?.split(':')[0]).toBe(bin)
   await next.stop()
-  expect(process.env.GIT_CONFIG_GLOBAL).toBeUndefined()
   expect(process.env.PATH?.split(':')).not.toContain(bin)
 })
 

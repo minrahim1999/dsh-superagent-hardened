@@ -89,7 +89,14 @@ export class Setup {
       throw new SetupError('environmentFailed', { output: error instanceof Error ? error.message : String(error) })
     }
     await writeEnvironment(resolved, settings.executor.blockedCommands).catch(machineProblem)
-    this.restoreEnvironment = applyEnvironment(this.variables, machine.stateDir, this.path)
+    // `shims` leaves the operator's git configuration alone: only the shim directory joins this process's PATH.
+    // `shims-and-git` is the upstream behaviour, which also points every git command in this process at the agent config.
+    if (machine.processEnvironment !== 'none') {
+      this.restoreEnvironment = applyEnvironment(machine.processEnvironment === 'shims-and-git' ? this.variables : {},
+        machine.stateDir, this.path)
+    }
+    if (machine.processEnvironment !== 'shims-and-git') return resolved
+    // Verify the git isolation only in the mode that claims it.
     await verifyEnvironment(resolved, context.subprocess, lifetime).catch((error: unknown) => {
       this.restore()
       machineProblem(error)

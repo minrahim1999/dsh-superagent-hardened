@@ -23,6 +23,11 @@ Keep `LICENSE` and the upstream README's research-prototype notice.
      unattended Session is never left waiting on a prompt; `SessionsHost` gains `permission`/`approval`.
      The `approval` service is now a module dependency (`@deepseek-ai/dsh-user-approval`).
    - `src/app/runtime.ts`: passes `machine.sessionPermission` into `Sessions`.
+   - `src/app/setup.ts` + a new `processEnvironment` config key: once setup succeeds, `shims` (our
+     default) only puts `<stateDir>/worker-bin` first on this DSH process's `PATH` (the agent `gh` and the
+     blocked commands) and leaves git configuration alone; `shims-and-git` is the upstream behaviour that
+     also rewrites `GIT_CONFIG_GLOBAL`; `none` touches the process environment at all. The git-config
+     verification runs only in `shims-and-git`, so `gitTooOld` can no longer arise in the other modes.
    - `src/index.ts`: validates the named preset with `ctx.permissionPresets.resolve(...)` at startup and
      fails the entry with a message naming the preset if the profile does not define it.
    - Workers then write only inside their ticket workspace instead of the operator's whole OS account.
@@ -40,10 +45,12 @@ Keep `LICENSE` and the upstream README's research-prototype notice.
 
 ## Deliberately NOT changed
 
-- `src/infra/environment.ts` still rewrites `process.env` (`PATH`, `GIT_CONFIG_GLOBAL`, …) once setup
-  succeeds. This is load-bearing: `SessionCreateRequest` has no env field, so worker Sessions inherit
-  the DSH process environment. Removing it would make workers fall back to the operator's own `gh`
-  credentials and git config. **Containment is the separate profile/process, not this code.**
+- Worker Sessions still inherit this process's environment: `SessionCreateRequest` has no env field and
+  `ctx.shellEnv` only carries `DSH_*` facts, so there is no per-Session environment. That is why the
+  scope is a config choice rather than something this fork can remove outright.
+- With the default `processEnvironment: shims`, worker `git` therefore uses the operator's own git
+  configuration and credentials, while `gh` still resolves through the agent shim and the blocked
+  commands still refuse. Set `shims-and-git` if the agent must use a separate git identity.
 - The built-in Delivery prompt still describes auto-merge; it only activates when the Prompts settings
   name a merge CLI, and the default names none. Leave that section without a merge CLI.
 - The management API stays on the profile's loopback Web server (`/orchestrator/api`, same-origin plus
