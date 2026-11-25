@@ -1,6 +1,7 @@
 /** Plugin configuration and startup verification for repository access and agent CLI identities. */
 import { LIMITS } from './limits.ts'
 import { accessSync, constants, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
 import type { Volatile } from '@deepseek-ai/cordis'
 import s from '@deepseek-ai/schemastery'
@@ -11,9 +12,17 @@ import { SetupError } from './setup.ts'
 
 const reason = (error: unknown): string => error instanceof Error ? error.message : String(error)
 const absolute = (description: string) => s.string().pattern(/^\//).description(`${description} Absolute path.`)
+/** Default state directory: `<DSH_HOME>/state/superagent`, so a profile needs no configuration to start the bundle. */
+const defaultStateDir = (): string => join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'state', 'superagent')
 /** Plugin configuration of the dsh-superagent entry. Volatile fields apply without a restart because dsh-superagent reads them on each use; changing `stateDir` remounts the plugin. */
 export const Config = s.object({
-  stateDir: absolute('Directory for the database, locks, worker shims, the agent\'s git configuration and, by default, the ticket directories.').required(),
+  stateDir: absolute('Directory for the database, locks, worker shims, the agent\'s git configuration and, by default, the ticket directories.').default(defaultStateDir()),
+  sessionPermission: s.string().pattern(/^[A-Za-z0-9._-]+$/)
+    .description('Permission preset DSH applies to every Session this installation creates; the profile must define it. Prefer a preset whose sandbox is workspace-write, so an Executor writes inside its ticket directory rather than across the operator\'s whole OS account.')
+    .default('workspace-write'),
+  sessionApproval: s.string().pattern(/^(ask|never)$/)
+    .description('Approval policy applied on top of sessionPermission. `never` lets an unattended Executor run without a person answering prompts; pair it with a confining sandbox.')
+    .default('never'),
   promptMaxChars: s.number().min(LIMITS.promptMaxChars.min).max(LIMITS.promptMaxChars.max).step(1).default(100000)
     .description('Largest saved prompt configuration, in characters.').volatile(),
   admissionContextMaxPages: s.number().min(LIMITS.admissionContextMaxPages.min).max(LIMITS.admissionContextMaxPages.max).step(1).default(10)
@@ -24,6 +33,10 @@ export const Config = s.object({
 export type DeploymentConfig = ReturnType<typeof Config>
 export interface Machine {
   stateDir: string
+  /** Profile permission preset each Session of this installation runs under. */
+  sessionPermission: string
+  /** Approval policy applied on top of that preset, so an unattended Session is never left waiting. */
+  sessionApproval: 'ask' | 'never'
   promptMaxChars: Volatile<number>
   admissionContextMaxPages: Volatile<number>
   admissionContextTimeoutMs: Volatile<number>
@@ -38,8 +51,9 @@ const MOVED: Record<string, string> = {
 export function machineOf(config: DeploymentConfig): Machine {
   const unknown = Object.keys(config).filter(key => !(key in (Config.dict ?? {})))
   if (unknown.length) throw new Error(`dsh-superagent configuration has keys it does not use: ${unknown.map(key => MOVED[key] ? `${key} (now ${MOVED[key]})` : key).join(', ')}; docs/006-deployment.md lists the keys`)
-  const { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs } = config
-  return { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs }
+  const { stateDir, sessionPermission, sessionApproval, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs } = config
+  return { stateDir, sessionPermission, sessionApproval: sessionApproval === 'ask' ? 'ask' : 'never',
+    promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs }
 }
 
 export const GithubAccountsSchema = z.object({

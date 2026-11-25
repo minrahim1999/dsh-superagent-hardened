@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Store } from '../src/app/store.ts'
-import { SettingsSchema } from '../src/policy.ts'
+import { DEFAULT_BLOCKED_COMMANDS, SettingsSchema } from '../src/policy.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { feishuKind } from '../src/sources/feishu.ts'
 import { githubKind } from '../src/sources/github.ts'
@@ -211,7 +211,7 @@ it('words each settings save by what it changed from the one before, and nothing
     { code: 'sourceRowsAdded', source: 'feishu', part: true, field: 'allowed', items: ['Bob', 'ou_carol'] },
     { code: 'sourceRowsChanged', source: 'feishu', part: true, field: 'allowed', items: ['Alice Liu'] },
     { code: 'paused' }, { code: 'executionDirectory', from: '', to: '/srv/work' }, { code: 'prepareCommand' },
-    { code: 'blockedCommands', from: '', to: 'rm curl' }, { code: 'sourceDisabled', source: 'feishu' }])
+    { code: 'blockedCommands', from: DEFAULT_BLOCKED_COMMANDS.join(' '), to: 'rm curl' }, { code: 'sourceDisabled', source: 'feishu' }])
   expect(changes(revision)).toEqual([{ code: 'sourceRowsRemoved', source: 'feishu', part: true, field: 'allowed', items: ['Bob'] },
     { code: 'resumed' }, { code: 'sourceEnabled', source: 'feishu' }])
   // A save whose predecessor is missing from the history has nothing to compare with.

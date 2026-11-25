@@ -22,6 +22,8 @@ function context() {
     inject: vi.fn((_services: string[], callback: (child: unknown) => void) => { callback({ effect: (effect: () => unknown) => effect(), settings: { configure } }) }),
     effect: vi.fn(),
     fiber: { restart: vi.fn(async () => {}) },
+    // The profile's preset registry: `resolve` throws for a name the profile does not define.
+    permissionPresets: { resolve: vi.fn((_name: string) => ({ sandbox: 'workspace-write', approval: 'never' })) },
     get: vi.fn((name: string) => name === 'settings' ? { describe } : undefined),
     logger: { info: vi.fn(), error: vi.fn() },
   }
@@ -59,4 +61,12 @@ it('refuses keys of the previous configuration before registering anything', asy
   await expect(apply(ctx as never, Config({ stateDir: '/srv/state', github: { cli: 'gh' } } as never))).rejects.toThrow('github (now on the GitHub Source)')
   expect(ctx.on).not.toHaveBeenCalled()
   expect(ctx.inject).not.toHaveBeenCalled()
+})
+
+it('refuses to start when the profile does not define its session permission preset', async () => {
+  const { ctx } = context()
+  ctx.permissionPresets.resolve.mockImplementation(() => { throw new Error('unknown preset') })
+  await expect(apply(ctx as never, Config({ stateDir: '/srv/state', sessionPermission: 'missing-preset' })))
+    .rejects.toThrow('needs the permission preset "missing-preset"')
+  expect(ctx.on).not.toHaveBeenCalled()
 })

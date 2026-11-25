@@ -5,10 +5,15 @@ import { Runtime } from './app/runtime.ts'
 import { Config, machineOf, type DeploymentConfig } from './deployment.ts'
 
 export const name = 'dsh-superagent'
-export const inject = ['agents', 'sessionController', 'sessionPersistence', 'workspaceRegistry', 'permissionPresets', 'tools', 'systemPrompt', 'skills', 'webServer', 'llm', 'subprocess']
+export const inject = ['agents', 'sessionController', 'sessionPersistence', 'workspaceRegistry', 'permissionPresets', 'approval', 'tools', 'systemPrompt', 'skills', 'webServer', 'llm', 'subprocess']
 export { Config }
 export async function apply(ctx: Context, config: DeploymentConfig): Promise<void> {
   const machine = machineOf(config)
+  // Fail at startup instead of at the first ticket when the profile lacks the preset: `set` throws for an unknown name, and its
+  // name in this message is the one to add to the profile's permission presets.
+  try { ctx.permissionPresets.resolve(machine.sessionPermission) } catch {
+    throw new Error(`dsh-superagent needs the permission preset ${JSON.stringify(machine.sessionPermission)} for its Sessions, which this profile does not define; add it to the profile's permission presets, or set sessionPermission to one it defines (a workspace-write preset keeps an Executor inside its ticket directory)`)
+  }
   // The management panel provides its own settings UI, so disable DSH's auto-generated settings page.
   ctx.inject(['settings'], child => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
   // Volatile limits update in place without a restart; account changes restart dsh-superagent. DSH's settings service stops

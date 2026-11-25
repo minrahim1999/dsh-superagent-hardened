@@ -87,13 +87,20 @@ export const EvalConfigSchema = z.object({
 }).strict()
 const CommandNameSchema = z.string().regex(/^[A-Za-z0-9._-]+$/).refine(name => name !== '.' && name !== '..', 'Not a command name')
   .refine(name => !WORKER_COMMANDS.includes(name), `${WORKER_COMMANDS.join(', ')} cannot be blocked`)
+/**
+ * Commands every Executor refuses until the operator edits them in Execution settings: privilege escalation, macOS automation
+ * and credential stores, system and disk controls, and the remote shells that can carry credentials off this machine. Each
+ * becomes a failing shim in `<stateDir>/worker-bin`, so a worker's own shell never reaches the real command.
+ */
+export const DEFAULT_BLOCKED_COMMANDS: readonly string[] = ['sudo', 'doas', 'su', 'osascript', 'open', 'security', 'defaults',
+  'launchctl', 'diskutil', 'shutdown', 'reboot', 'halt', 'ssh', 'scp', 'sftp', 'nc', 'telnet']
 /** Executor settings: worker model, concurrency, ticket directory root (empty defaults to `<stateDir>/work`), `prepare` command, and blocked commands. */
 export const ExecutorConfigSchema = z.object({
   model: RoleModelSchema.nullable().default(null),
   maxWorkers: z.number().int().min(LIMITS.maxWorkers.min).max(LIMITS.maxWorkers.max).default(3),
   directory: z.string().trim().refine(path => path === '' || path.startsWith('/'), 'An absolute path, or empty for <stateDir>/work').default(''),
   prepare: z.string().max(LIMITS.prepareCommand).default(''),
-  blockedCommands: z.array(CommandNameSchema).default([]),
+  blockedCommands: z.array(CommandNameSchema).default([...DEFAULT_BLOCKED_COMMANDS]),
 }).strict()
 export const SourceInstanceSchema = z.object({ enabled: z.boolean().default(true), config: z.record(z.string(), z.unknown()).default({}) }).strict()
 export const SettingsSchema = z.object({
